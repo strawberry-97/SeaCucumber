@@ -1,5 +1,7 @@
 # SC VPN（vpn_app）
 
+[English](README_EN.md) | 中文
+
 基于 [Flutter](https://flutter.dev) + [sing-box](https://sing-box.sagernet.org/) 内核的跨平台 VPN 客户端，支持 **Android / iOS / macOS / Windows**。
 
 参考 `clash-verg`（iOS SwiftUI + sing-box）重写为 Flutter，保留其核心能力：导入订阅 → 显示节点 → 一键连接，**国内直连、国外走代理**（分流路由）。
