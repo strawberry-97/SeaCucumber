@@ -1,0 +1,169 @@
+import 'package:flutter/foundation.dart';
+
+import '../models/subscription_type.dart';
+import '../models/vless_node.dart';
+import '../services/clash_parser.dart';
+import '../services/config_generator.dart';
+import '../services/file_service.dart';
+import '../services/shadowrocket_parser.dart';
+import '../services/storage_service.dart';
+import '../services/subscription_loader.dart';
+
+/// 应用状态（节点 / 订阅 / 外观 / 导入）
+///
+/// 移植自 clash-verg 的 AppState.swift
+class AppState extends ChangeNotifier {
+  List<VlessNode> nodes = [];
+  VlessNode? selectedNode;
+
+  SubscriptionType subscriptionType = SubscriptionType.clashVerge;
+  AppAppearance appearance = AppAppearance.system;
+
+  String clashVergeURL = '';
+  String shadowrocketURL = '';
+  String otherURL = '';
+
+  bool isImporting = false;
+  String message = '';
+
+  bool _didAutoImport = false;
+
+  /// 当前订阅类型对应的 URL
+  String get currentSubscriptionURL => switch (subscriptionType) {
+        SubscriptionType.clashVerge => clashVergeURL,
+        SubscriptionType.shadowrocket => shadowrocketURL,
+        SubscriptionType.other => otherURL,
+      };
+
+  /// 从本地存储恢复状态
+  Future<void> load() async {
+    subscriptionType = StorageService.subscriptionType;
+    appearance = StorageService.appearance;
+    clashVergeURL = StorageService.clashVergeURL;
+    shadowrocketURL = StorageService.shadowrocketURL;
+    otherURL = StorageService.otherURL;
+    notifyListeners();
+  }
+
+  /// 进入 app 时自动导入一次订阅（若本地已记住链接）
+  Future<void> autoImportIfNeeded() async {
+    if (_didAutoImport) return;
+    _didAutoImport = true;
+    if (currentSubscriptionURL.trim().isEmpty) return;
+    await importSubscription();
+  }
+
+  /// 下载并解析订阅
+  Future<void> importSubscription() async {
+    final urlString = currentSubscriptionURL.trim();
+    if (urlString.isEmpty) {
+      message = '请先输入订阅地址';
+      notifyListeners();
+      return;
+    }
+    final uri = Uri.tryParse(urlString);
+    if (uri == null || !(uri.isScheme('http') || uri.isScheme('https'))) {
+      message = '订阅地址无效';
+      notifyListeners();
+      return;
+    }
+
+    isImporting = true;
+    notifyListeners();
+    try {
+      final raw = await SubscriptionLoader.download(
+        url: uri,
+        type: subscriptionType,
+      );
+
+      final List<VlessNode> parsed = switch (subscriptionType) {
+        SubscriptionType.clashVerge => ClashParser.parseNodes(raw),
+        SubscriptionType.shadowrocket => ShadowrocketParser.parseNodes(raw),
+        SubscriptionType.other => _detectAndParse(raw),
+      };
+
+      if (parsed.isEmpty) {
+        message = '未解析到节点';
+        return;
+      }
+
+      StorageService.rememberURL(subscriptionType, urlString);
+      nodes = parsed;
+      selectedNode = parsed.first;
+      await FileService.ensureRuleSets();
+      if (parsed.isNotEmpty) {
+        await FileService.writeConfig(
+          ConfigGenerator.makeConfig(parsed.first),
+        );
+      }
+      StorageService.selectedNodeName = parsed.first.name;
+      message = '导入成功';
+      await FileService.writeDiagnostic(
+        nodesCount: nodes.length,
+        selectedNode: selectedNode?.name,
+        subscriptionTitle: subscriptionType.title,
+      );
+    } on SubscriptionException catch (e) {
+      message = '导入失败：${e.message}';
+      debugPrint('importSubscription failed: ${e.message}');
+      await FileService.log('importSubscription failed: ${e.message}');
+    } catch (e) {
+      message = '导入失败：$e';
+      debugPrint('importSubscription failed: $e');
+      await FileService.log('importSubscription failed: $e');
+    } finally {
+      isImporting = false;
+      notifyListeners();
+    }
+  }
+
+  /// 「其它」类型：自动识别订阅格式（Clash YAML / 小火箭 base64 列表）
+  static List<VlessNode> _detectAndParse(String raw) {
+    if (raw.contains('proxies:')) {
+      return ClashParser.parseNodes(raw);
+    }
+    return ShadowrocketParser.parseNodes(raw);
+  }
+
+  /// 选中节点并写入配置
+  Future<void> select(VlessNode node) async {
+    selectedNode = node;
+    StorageService.selectedNodeName = node.name;
+    await FileService.ensureRuleSets();
+    final ok = await FileService.writeConfig(ConfigGenerator.makeConfig(node));
+    if (!ok) {
+      message = '写入配置失败，请重试';
+    }
+    notifyListeners();
+  }
+
+  /// 更新当前订阅类型对应的 URL
+  void updateSubscriptionURL(String value) {
+    switch (subscriptionType) {
+      case SubscriptionType.clashVerge:
+        clashVergeURL = value;
+      case SubscriptionType.shadowrocket:
+        shadowrocketURL = value;
+      case SubscriptionType.other:
+        otherURL = value;
+    }
+    notifyListeners();
+  }
+
+  void setSubscriptionType(SubscriptionType t) {
+    subscriptionType = t;
+    StorageService.subscriptionType = t;
+    notifyListeners();
+  }
+
+  void setAppearance(AppAppearance a) {
+    appearance = a;
+    StorageService.appearance = a;
+    notifyListeners();
+  }
+
+  void showMessage(String msg) {
+    message = msg;
+    notifyListeners();
+  }
+}

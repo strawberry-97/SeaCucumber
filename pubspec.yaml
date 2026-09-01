@@ -1,0 +1,32 @@
+name: vpn_app
+description: "SC VPN - 基于 sing-box 的跨平台 VPN 客户端（Android / iOS / macOS / Windows）"
+publish_to: 'none'
+
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.13.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  cupertino_icons: ^1.0.8
+  # 本地存储（订阅地址 / 类型 / 外观 / 选中节点）
+  shared_preferences: ^2.3.2
+  # 应用文档目录（config.json / 日志 / 诊断）
+  path_provider: ^2.1.4
+  # 订阅下载
+  http: ^1.2.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    - assets/rules/
