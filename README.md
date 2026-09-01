@@ -17,6 +17,7 @@
 - **双订阅协议 + 自动识别**：Clash Verge（YAML）、小火箭（base64 `vless://`）、「其它」（自动识别格式）
 - **协议支持**：VLESS + Reality（TCP）、VLESS + WebSocket + TLS；`hysteria2` 暂不支持
 - **订阅链接本机记忆**：订阅成功后自动保存，下次启动自动导入并选中第一个节点
+- **本地订阅文件导入**：订阅服务器不可直连时，可从 App 文档目录的 `subscription_local.txt` 读取并导入
 - **玻璃拟态 UI**：磨砂玻璃质感 + 浅色/深色自适应；节点 / 订阅 / 日志 / 设置
 
 ## 平台状态
@@ -25,8 +26,8 @@
 |---|---|---|
 | Android | ✅ 可用 | `VpnService` + `libbox.aar`，含 `protect()` 防环路、前台通知、接口探测 |
 | macOS | ✅ 可用 | `NETunnelProviderManager` + 隧道扩展 + `Libbox.xcframework`（含 macos slice） |
-| iOS | ⏳ 代码就绪 | 需真机 + 开发者签名 + App Group（模拟器无法建立 TUN） |
-| Windows | ⏳ 引擎就绪 | `sing-box.exe` 子进程 + `wintun.dll`，需 Windows 环境 + 管理员权限 |
+| iOS | ⏳ 代码就绪 | 需真机 + 开发者签名 + App Group；已内置本地网络授权探测与 Personal VPN entitlement（模拟器无法建立 TUN） |
+| Windows | ⏳ 引擎就绪 | `sing-box.exe` 子进程（UAC 提权）+ `wintun.dll`，引擎已完整实现，待 Windows 环境验证 |
 
 ## 目录结构
 
@@ -45,7 +46,7 @@ vpn_app/
 ├── ios/                        # iOS 原生（Runner + Tunnel Network Extension + Libbox.xcframework）
 ├── macos/                      # macOS 原生（Runner + TunnelExtension）
 ├── windows/                    # Windows 原生（sing-box.exe 子进程）
-├── scripts/                    # 构建与工程配置脚本
+├── scripts/                    # 构建与工程配置脚本（含 build_libbox_android.sh 一键构建内核）
 └── test/                       # Dart 单元测试（解析器 / 配置生成）
 ```
 
@@ -61,7 +62,8 @@ vpn_app/
 ## 使用流程
 
 1. 打开 App → 底部切到「设置」→ 选择订阅类型（Clash Verge / 小火箭 / 其它）
-2. 粘贴订阅地址 → 点「导入订阅」
+2. 粘贴订阅地址 → 点「导入订阅」；若订阅服务器不可直连，可把订阅内容写入文档目录
+   `subscription_local.txt` 后点「从本地文件导入」
 3. 回「节点」页选节点 → 点「建立连接」，Android 首次会弹系统 VPN 授权框，点允许
 4. 换节点 = 重写 `config.json` + 隧道重启
 5. 订阅成功后链接已本机记忆；下次启动会自动导入并选中第一个节点
@@ -115,6 +117,9 @@ cp libbox.aar <本项目>/android/app/libs/libbox.aar
 
 `android/app/build.gradle.kts` 已启用 `implementation(files("libs/libbox.aar"))`。
 
+> 也可直接运行 `./scripts/build_libbox_android.sh [singbox-core 路径]` 一键完成构建与复制
+> （脚本默认读取 `../clash-verg/singbox-core`）。
+
 > 国内网络：`android/settings.gradle.kts` 与 `android/build.gradle.kts` 已配置
 > 阿里云 Maven 镜像（central / google / gradle-plugin），避免 Maven Central 被墙。
 
@@ -144,9 +149,11 @@ go run ./cmd/internal/build_libbox -target apple -platform macos
 Xcode 打开 `ios/Runner.xcodeproj` 或 `macos/Runner.xcodeproj`：
 
 1. 登录开发者账号，为 Runner 与 tunnel 两个 target 配置签名
-2. 在开发者后台注册 App Group `group.com.scvpn.vpnApp`，
+2. 在开发者后台注册 App Group `group.com.scvpn.vpnApp`，并开通
+   Personal VPN entitlement（`com.apple.developer.networking.vpn.api` = `allow-vpn`）；
    两个 target 的 Capabilities 都勾选 App Groups / Network Extension
-3. 真机运行（VPN 隧道无法在 iOS 模拟器上建立 TUN）
+3. 真机运行（VPN 隧道无法在 iOS 模拟器上建立 TUN）；
+   App 启动时会主动探测局域网，触发 iOS「本地网络」授权弹窗
 
 > 工程结构已由脚本预置：
 > - `scripts/add_swift_to_xcode.py`（VpnManager/SharedConstants 注册）
