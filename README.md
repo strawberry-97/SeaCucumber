@@ -26,7 +26,7 @@
 |---|---|---|
 | Android | ✅ 可用 | `VpnService` + `libbox.aar`，含 `protect()` 防环路、前台通知、接口探测 |
 | macOS | ✅ 可用 | `NETunnelProviderManager` + 隧道扩展 + `Libbox.xcframework`（含 macos slice） |
-| iOS | ⏳ 代码就绪 | 需真机 + 开发者签名 + App Group；已内置本地网络授权探测与 Personal VPN entitlement（模拟器无法建立 TUN） |
+| iOS | ✅ 可用 | `NETunnelProviderManager` + 隧道扩展 + `Libbox.xcframework`；需真机 + 开发者签名 + App Group，已内置本地网络授权探测与 Personal VPN entitlement（模拟器无法建立 TUN） |
 | Windows | ⏳ 引擎就绪 | `sing-box.exe` 子进程（UAC 提权）+ `wintun.dll`，引擎已完整实现，待 Windows 环境验证 |
 
 ## 目录结构
