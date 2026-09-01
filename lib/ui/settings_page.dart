@@ -35,14 +35,56 @@ class SettingsPage extends StatelessWidget {
 
 // MARK: - 订阅
 
-class _SubscriptionCard extends StatelessWidget {
+class _SubscriptionCard extends StatefulWidget {
   final AppState state;
   final VpnEngine vpn;
 
   const _SubscriptionCard({required this.state, required this.vpn});
 
   @override
+  State<_SubscriptionCard> createState() => _SubscriptionCardState();
+}
+
+class _SubscriptionCardState extends State<_SubscriptionCard> {
+  late final TextEditingController _controller;
+  late SubscriptionType _lastType;
+
+  @override
+  void initState() {
+    super.initState();
+    _lastType = widget.state.subscriptionType;
+    _controller =
+        TextEditingController(text: widget.state.currentSubscriptionURL);
+    _controller.addListener(_onTextChanged);
+  }
+
+  void _onTextChanged() {
+    if (_controller.text != widget.state.currentSubscriptionURL) {
+      widget.state.updateSubscriptionURL(_controller.text);
+    }
+  }
+
+  @override
+  void didUpdateWidget(_SubscriptionCard oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 切换订阅类型时，让输入框跟随显示该类型的已保存地址
+    if (widget.state.subscriptionType != _lastType) {
+      _lastType = widget.state.subscriptionType;
+      _controller.text = widget.state.currentSubscriptionURL;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.removeListener(_onTextChanged);
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final state = widget.state;
+    final vpn = widget.vpn;
     return TechCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -57,7 +99,7 @@ class _SubscriptionCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           TextField(
-            controller: _subscriptionController(state),
+            controller: _controller,
             autocorrect: false,
             enableSuggestions: false,
             style: const TextStyle(fontSize: 12, fontFamily: 'monospace'),
@@ -87,7 +129,6 @@ class _SubscriptionCard extends StatelessWidget {
                 borderSide: const BorderSide(color: AppTheme.cyanDeep),
               ),
             ),
-            onChanged: state.updateSubscriptionURL,
           ),
           const SizedBox(height: 12),
           _GradientButton(
@@ -128,22 +169,10 @@ class _SubscriptionCard extends StatelessWidget {
       ),
     );
     if (ok == true) {
-      await vpn.disconnect();
+      await widget.vpn.disconnect();
       await Future.delayed(const Duration(milliseconds: 800));
-      await state.importSubscription();
+      await widget.state.importSubscription();
     }
-  }
-
-  /// 订阅地址输入框控制器（切换类型时内容跟随变化）
-  TextEditingController _subscriptionController(AppState state) {
-    // 用一次性控制器即可，onChanged 同步回 state
-    final c = TextEditingController(text: state.currentSubscriptionURL);
-    c.addListener(() {
-      if (c.text != state.currentSubscriptionURL) {
-        state.updateSubscriptionURL(c.text);
-      }
-    });
-    return c;
   }
 }
 
