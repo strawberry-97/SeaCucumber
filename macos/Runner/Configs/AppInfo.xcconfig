@@ -11,4 +11,4 @@ PRODUCT_NAME = vpn_app
 PRODUCT_BUNDLE_IDENTIFIER = com.scvpn.vpnApp
 
 // The copyright displayed in application information
-PRODUCT_COPYRIGHT = Copyright © 2026 com.scvpn. All rights reserved.
+PRODUCT_COPYRIGHT = Copyright © 2026 SC VPN. All rights reserved.
