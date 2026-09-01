@@ -4,7 +4,18 @@
 <dict>
 	<key>com.apple.developer.networking.networkextension</key>
 	<array>
+		<string>dns-proxy</string>
+		<string>content-filter-provider</string>
+		<string>hotspot-provider</string>
+		<string>app-proxy-provider</string>
 		<string>packet-tunnel-provider</string>
+		<string>dns-settings</string>
+		<string>relay</string>
+		<string>url-filter-provider</string>
+	</array>
+	<key>com.apple.developer.networking.vpn.api</key>
+	<array>
+		<string>allow-vpn</string>
 	</array>
 	<key>com.apple.security.app-sandbox</key>
 	<true/>

@@ -143,6 +143,19 @@ class _SubscriptionCardState extends State<_SubscriptionCard> {
               }
             },
           ),
+          const SizedBox(height: 8),
+          _GradientButton(
+            label: '从本地文件导入',
+            icon: Icons.folder_open_rounded,
+            loading: false,
+            onTap: () async {
+              if (vpn.isConnected) {
+                await vpn.disconnect();
+                await Future.delayed(const Duration(milliseconds: 800));
+              }
+              await state.importLocalSubscription();
+            },
+          ),
         ],
       ),
     );

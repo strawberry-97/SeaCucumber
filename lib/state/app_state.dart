@@ -71,6 +71,7 @@ class AppState extends ChangeNotifier {
     isImporting = true;
     notifyListeners();
     try {
+      await FileService.log('importSubscription url=$urlString type=${subscriptionType.name}');
       final raw = await SubscriptionLoader.download(
         url: uri,
         type: subscriptionType,
@@ -82,27 +83,8 @@ class AppState extends ChangeNotifier {
         SubscriptionType.other => _detectAndParse(raw),
       };
 
-      if (parsed.isEmpty) {
-        message = '未解析到节点';
-        return;
-      }
-
       StorageService.rememberURL(subscriptionType, urlString);
-      nodes = parsed;
-      selectedNode = parsed.first;
-      await FileService.ensureRuleSets();
-      if (parsed.isNotEmpty) {
-        await FileService.writeConfig(
-          ConfigGenerator.makeConfig(parsed.first),
-        );
-      }
-      StorageService.selectedNodeName = parsed.first.name;
-      message = '导入成功';
-      await FileService.writeDiagnostic(
-        nodesCount: nodes.length,
-        selectedNode: selectedNode?.name,
-        subscriptionTitle: subscriptionType.title,
-      );
+      await _applyParsedNodes(parsed);
     } on SubscriptionException catch (e) {
       message = '导入失败：${e.message}';
       debugPrint('importSubscription failed: ${e.message}');
@@ -115,6 +97,68 @@ class AppState extends ChangeNotifier {
       isImporting = false;
       notifyListeners();
     }
+  }
+
+  /// 从本地文件导入订阅内容（订阅服务器不可直连时用）
+  Future<void> importLocalSubscription() async {
+    final raw = await FileService.readLocalSub();
+    if (raw == null || raw.trim().isEmpty) {
+      message = '未找到本地订阅文件';
+      notifyListeners();
+      return;
+    }
+    await FileService.log(
+        'importLocalSubscription type=${subscriptionType.name} len=${raw.length}');
+    await importRawContent(raw);
+  }
+
+  /// 直接导入订阅内容（YAML / base64 列表）
+  Future<void> importRawContent(String raw) async {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) {
+      message = '订阅内容为空';
+      notifyListeners();
+      return;
+    }
+    isImporting = true;
+    notifyListeners();
+    try {
+      final List<VlessNode> parsed = switch (subscriptionType) {
+        SubscriptionType.clashVerge => ClashParser.parseNodes(trimmed),
+        SubscriptionType.shadowrocket => ShadowrocketParser.parseNodes(trimmed),
+        SubscriptionType.other => _detectAndParse(trimmed),
+      };
+      await _applyParsedNodes(parsed);
+    } catch (e) {
+      message = '导入失败：$e';
+      debugPrint('importRawContent failed: $e');
+      await FileService.log('importRawContent failed: $e');
+    } finally {
+      isImporting = false;
+      notifyListeners();
+    }
+  }
+
+  /// 解析成功后写入节点与配置
+  Future<void> _applyParsedNodes(List<VlessNode> parsed) async {
+    if (parsed.isEmpty) {
+      message = '未解析到节点';
+      return;
+    }
+
+    nodes = parsed;
+    selectedNode = parsed.first;
+    await FileService.ensureRuleSets();
+    await FileService.writeConfig(
+      ConfigGenerator.makeConfig(parsed.first),
+    );
+    StorageService.selectedNodeName = parsed.first.name;
+    message = '导入成功';
+    await FileService.writeDiagnostic(
+      nodesCount: nodes.length,
+      selectedNode: selectedNode?.name,
+      subscriptionTitle: subscriptionType.title,
+    );
   }
 
   /// 「其它」类型：自动识别订阅格式（Clash YAML / 小火箭 base64 列表）
@@ -147,6 +191,7 @@ class AppState extends ChangeNotifier {
       case SubscriptionType.other:
         otherURL = value;
     }
+    FileService.log('updateSubscriptionURL type=${subscriptionType.name} value=$value');
     notifyListeners();
   }
 

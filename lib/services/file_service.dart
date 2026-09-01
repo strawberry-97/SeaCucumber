@@ -10,6 +10,7 @@ import 'package:path_provider/path_provider.dart';
 class FileService {
   static const String configFileName = 'config.json';
   static const String logFileName = 'tunnel.log';
+  static const String localSubFileName = 'subscription_local.txt';
   static const List<String> ruleSetFiles = [
     'geoip-cn.srs',
     'geosite-cn.srs',
@@ -97,6 +98,22 @@ class FileService {
       await f.writeAsString('$stamp $message\n',
           mode: FileMode.append, flush: true);
     } catch (_) {}
+  }
+
+  /// 本地订阅文件（用户无法直连订阅服务器时，可由外部写入后导入）
+  static Future<File> localSubFile() async {
+    final docs = await getApplicationDocumentsDirectory();
+    return File('${docs.path}/$localSubFileName');
+  }
+
+  static Future<String?> readLocalSub() async {
+    try {
+      final f = await localSubFile();
+      if (!await f.exists()) return null;
+      return await f.readAsString();
+    } catch (_) {
+      return null;
+    }
   }
 
   static Future<String> readLog() async {
