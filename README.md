@@ -185,7 +185,6 @@ flutter analyze
 <div align="center">
   <img src="assets/alipay-qr.jpg" width="200" alt="支付宝收款码" />
   <img src="assets/wechat-qr.jpg" width="200" alt="微信收款码" />
-  <p>左：支付宝收款码 · 右：微信收款码</p>
 </div>
 
 ## 使用声明
