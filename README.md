@@ -66,9 +66,30 @@ vpn_app/
 1. 打开 App → 底部切到「设置」→ 选择订阅类型（Clash Verge / 小火箭 / 其它）
 2. 粘贴订阅地址 → 点「导入订阅」；若订阅服务器不可直连，可把订阅内容写入文档目录
    `subscription_local.txt` 后点「从本地文件导入」
-3. 回「节点」页选节点 → 点「建立连接」，Android 首次会弹系统 VPN 授权框，点允许
-4. 换节点 = 重写 `config.json` + 隧道重启
-5. 订阅成功后链接已本机记忆；下次启动会自动导入并选中第一个节点
+3. 回「节点」页选节点 —— **默认模式（自动连接）下无需手动点「建立连接」**，
+   导入或选节点后会自动建立连接；Android 首次会弹系统 VPN 授权框，点允许
+4. 换节点 = 重写 `config.json` + 隧道自动重启（无需手动断开重连）
+5. 订阅成功后链接已本机记忆；下次启动会自动导入、选中上次用的节点并自动连接
+
+## 默认一直连接（自动连接 / 防掉线）
+
+App **默认处于「一直连接」状态**（设置页 → 连接 → 「自动连接（保持常连）」，默认开启）：
+
+- **启动即连**：打开 App 后自动导入订阅并建立连接；订阅服务器连不上时，
+  直接用上次写入的 `config.json` 先把隧道拉起来
+- **断线自愈**：隧道意外掉线且处于「应连接」状态时，Dart 侧按 3s→5s→8s→12s→20s→30s
+  退避自动重连；回到前台时再补查一次
+- **系统级始终开启（iOS / macOS）**：连接时给 `NETunnelProviderManager` 写入
+  `NEOnDemandRuleConnect`（`isOnDemandEnabled = true`），由系统常驻隧道 ——
+  重启手机、切网、App 被系统回收都会自动恢复；**这是「防止自动断开」的关键**
+- **Android**：`SonicVpnService` 返回 `START_STICKY` + `android:stopWithTask="false"`，
+  进程被杀后重启会用 `filesDir/last_config.json` 自动恢复；如需硬常连，
+  再到系统 `设置 → 网络 → VPN → SC VPN → 始终开启的 VPN` 打开
+- **手动断开只对本次会话有效**：点「断开连接」会同时关掉 on-demand 并停止隧道，
+  但下次启动仍会自动连。要永久不自动连，请在设置页关闭「自动连接」开关
+
+> 注意：`NEOnDemandRuleConnect` 规则下，从系统设置里手动关 VPN 图标也会被立刻拉回，
+> 这是 iOS「始终开启 VPN」的既定行为，不是 bug。
 
 ## 订阅格式说明
 
@@ -147,6 +168,21 @@ go run ./cmd/internal/build_libbox -target apple -platform macos
 ## 各平台运行
 
 ### iOS / macOS
+
+> ⚠️ **必须用 release 包装到真机。** Flutter 的 **debug 包在 iOS 14+ 无法脱离电脑运行** ——
+> Dart VM Service 需要反向连回电脑，被「本地网络」权限拦截，从手机桌面直接点开会卡住并提示
+> *“In iOS 14+, debug mode Flutter apps can only be launched from Flutter tooling, IDE…”*；
+> `flutter run` 一断，手机上的 debug App 立刻被系统杀掉（signal 9）。
+> 一个要「一直连接」的 VPN 显然不能挂着电脑，所以走 release：
+>
+> ```bash
+> flutter build ios --release
+> xcrun devicectl device install app --device <设备 UUID> \
+>   build/ios/iphoneos/Runner.app
+> xcrun devicectl device process launch --device <设备 UUID> com.scvpn.vpnApp
+> ```
+>
+> 设备 UUID 用 `xcrun devicectl list devices` 查。装完后即可从桌面独立启动。
 
 Xcode 打开 `ios/Runner.xcodeproj` 或 `macos/Runner.xcodeproj`：
 

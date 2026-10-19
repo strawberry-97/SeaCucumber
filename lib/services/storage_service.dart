@@ -12,6 +12,7 @@ class StorageService {
   static const _kShadowrocketURL = 'shadowrocketURL';
   static const _kOtherURL = 'otherURL';
   static const _kSelectedNodeName = 'selectedNodeName';
+  static const _kAutoConnect = 'autoConnect';
 
   static SharedPreferences? _prefs;
 
@@ -50,6 +51,10 @@ class StorageService {
       _p.getString(_kSelectedNodeName) ?? '';
   static set selectedNodeName(String v) =>
       _p.setString(_kSelectedNodeName, v);
+
+  /// 默认一直连接（开机/启动自动连、断线自动重连）
+  static bool get autoConnect => _p.getBool(_kAutoConnect) ?? true;
+  static set autoConnect(bool v) => _p.setBool(_kAutoConnect, v);
 
   /// 当前订阅类型对应的 URL
   static String urlFor(SubscriptionType type) => switch (type) {

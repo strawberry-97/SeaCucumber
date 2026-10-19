@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../models/subscription_type.dart';
-import '../services/config_generator.dart';
-import '../services/file_service.dart';
 import '../services/vpn_engine.dart';
 import '../state/app_state.dart';
 import '../theme/app_theme.dart';
@@ -21,7 +19,7 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   int _tab = 0;
   bool _showToast = false;
   int _toastToken = 0;
@@ -37,16 +35,30 @@ class _HomePageState extends State<HomePage> {
     // 监听状态变化，显示消息
     state.addListener(_onStateChanged);
     vpn.status.addListener(_onVpnStatusChanged);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      state.autoImportIfNeeded();
+    WidgetsBinding.instance.addObserver(this);
+    // 默认一直连接：挂上断线看护
+    state.attachConnectionWatch();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      await state.autoImportIfNeeded();
+      // 导入完成（或已有本地 config.json）后自动建立连接
+      await state.ensureConnected();
     });
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     state.removeListener(_onStateChanged);
     vpn.status.removeListener(_onVpnStatusChanged);
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState lifecycleState) {
+    // 回到前台时检查一次：被系统/后台回收过的隧道自动补连
+    if (lifecycleState == AppLifecycleState.resumed) {
+      vpn.refreshStatus().then((_) => state.ensureConnected());
+    }
   }
 
   void _onStateChanged() {
@@ -272,27 +284,12 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _toggleConnection() async {
-    if (state.selectedNode == null) {
-      state.showMessage('请先在「设置」导入订阅并选择节点');
+    if (vpn.isConnected) {
+      await state.disconnectByUser();
       return;
     }
     try {
-      if (vpn.isConnected) {
-        await vpn.disconnect();
-      } else {
-        // Android 需要先请求 VPN 权限
-        final granted = await vpn.prepare();
-        if (!granted) {
-          state.showMessage('未授予 VPN 权限');
-          return;
-        }
-        await FileService.ensureRuleSets();
-        await FileService.log('connect requested');
-        final config = ConfigGenerator.makeConfig(state.selectedNode!);
-        await vpn.connect(config);
-        await Future.delayed(const Duration(seconds: 2));
-        await vpn.refreshStatus();
-      }
+      await state.connectByUser();
     } catch (e) {
       final log = await vpn.readLog();
       final extra = log.isEmpty ? '' : '\n$log';

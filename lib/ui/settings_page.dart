@@ -21,6 +21,8 @@ class SettingsPage extends StatelessWidget {
       children: [
         _SubscriptionCard(state: state, vpn: vpn),
         const SizedBox(height: 12),
+        _ConnectionCard(state: state),
+        const SizedBox(height: 12),
         _AppearanceCard(state: state),
         const SizedBox(height: 12),
         _InfoCard(state: state),
@@ -150,8 +152,8 @@ class _SubscriptionCardState extends State<_SubscriptionCard> {
             loading: false,
             onTap: () async {
               if (vpn.isConnected) {
-                await vpn.disconnect();
-                await Future.delayed(const Duration(milliseconds: 800));
+                await state.disconnectByUser();
+                await Future.delayed(const Duration(milliseconds: 1200));
               }
               await state.importLocalSubscription();
             },
@@ -167,7 +169,7 @@ class _SubscriptionCardState extends State<_SubscriptionCard> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('需要断开 VPN'),
-        content: const Text('导入订阅会更新节点配置，需先断开当前 VPN。断开后请手动重新连接。'),
+        content: const Text('导入订阅会更新节点配置，需先断开当前 VPN。导入完成后会在「自动连接」开启时自动重连。'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -182,10 +184,49 @@ class _SubscriptionCardState extends State<_SubscriptionCard> {
       ),
     );
     if (ok == true) {
-      await widget.vpn.disconnect();
-      await Future.delayed(const Duration(milliseconds: 800));
+      await widget.state.disconnectByUser();
+      await Future.delayed(const Duration(milliseconds: 1200));
       await widget.state.importSubscription();
     }
+  }
+}
+
+// MARK: - 连接
+
+class _ConnectionCard extends StatelessWidget {
+  final AppState state;
+  const _ConnectionCard({required this.state});
+
+  @override
+  Widget build(BuildContext context) {
+    return TechCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _sectionHeader(context, '连接', Icons.power_settings_new),
+          const SizedBox(height: 6),
+          SwitchListTile.adaptive(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            value: state.autoConnect,
+            activeThumbColor: AppTheme.cyanDeep,
+            title: Text(
+              '自动连接（保持常连）',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: AppColors.text(context),
+              ),
+            ),
+            subtitle: Text(
+              '启动 App 自动连接；隧道掉线时自动重连；系统支持时启用「始终开启 VPN」',
+              style: TextStyle(fontSize: 11, color: AppColors.textDim(context)),
+            ),
+            onChanged: (v) => state.setAutoConnect(v),
+          ),
+        ],
+      ),
+    );
   }
 }
 

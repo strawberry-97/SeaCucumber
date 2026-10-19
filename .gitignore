@@ -31,7 +31,12 @@ migrate_working_dir/
 .pub-cache/
 .pub/
 /build/
+/build
 /coverage/
+
+# Editor
+.vscode/
+
 
 # Symbolication related
 app.*.symbols

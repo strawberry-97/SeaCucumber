@@ -83,6 +83,17 @@ std::string VpnEngine::LogPath() const {
   return path.string();
 }
 
+// sing-box.exe 与本程序同目录：用绝对路径，避免受工作目录 / PATH 影响。
+std::string VpnEngine::SingBoxPath() const {
+  char buf[MAX_PATH] = {};
+  DWORD n = GetModuleFileNameA(nullptr, buf, MAX_PATH);
+  if (n == 0 || n >= MAX_PATH) {
+    return "sing-box.exe";
+  }
+  auto dir = fs::path(std::string(buf, n)).parent_path();
+  return (dir / "sing-box.exe").string();
+}
+
 // 简单的 base64 解码（规则集数据由 Dart 侧提供）
 static std::string Base64Decode(const std::string& in) {
   static const std::string table =
@@ -134,7 +145,7 @@ void VpnEngine::Connect(const std::string& config,
   }
 
   // sing-box.exe 需要管理员权限才能创建 TUN 接口
-  std::string exe = "sing-box.exe";
+  std::string exe = SingBoxPath();
   std::string cmd = "run -c \"" + ConfigPath() + "\" > \"" + LogPath() + "\" 2>&1";
   std::string cwd = dir.string();
 

@@ -66,9 +66,21 @@ vpn_app/
 1. Open the app → switch to the "Settings" tab → choose a subscription type (Clash Verge / Shadowrocket / Other)
 2. Paste the subscription URL → tap "Import Subscription"; if the subscription server is not directly reachable, write the subscription content to the documents directory
    `subscription_local.txt` and tap "Import from Local File"
-3. Go back to the "Nodes" page, select a node → tap "Connect"; on Android the system VPN authorization dialog appears the first time — tap Allow
-4. Switching nodes = rewriting `config.json` + restarting the tunnel
-5. After a successful import the URL is remembered locally; the next launch auto-imports and selects the first node
+3. Go back to the "Nodes" page and select a node — **in the default auto-connect mode you do not need to tap "Connect"**; the tunnel is established automatically after import or node selection. On Android the system VPN authorization dialog appears the first time — tap Allow
+4. Switching nodes = rewriting `config.json` + automatic tunnel restart (no manual reconnect needed)
+5. After a successful import the URL is remembered locally; the next launch auto-imports, selects the previously used node, and connects
+
+## Always Connected by Default (auto-connect / anti-dropout)
+
+The app is **always-connected by default** (Settings → Connection → "Auto Connect (keep alive)", enabled by default):
+
+- **Connect on launch**: opening the app imports the subscription and establishes the tunnel; if the subscription server is unreachable, the previously written `config.json` is used to bring the tunnel up first
+- **Self-healing**: when the tunnel drops while it is still supposed to be up, Dart retries with exponential backoff (3s→5s→8s→12s→20s→30s), plus one extra check when the app returns to the foreground
+- **System-level always-on (iOS / macOS)**: on connect it writes `NEOnDemandRuleConnect` into the `NETunnelProviderManager` (`isOnDemandEnabled = true`), letting the system keep the tunnel alive — it survives reboots, network changes and the app being reclaimed by the system. **This is the key to "no automatic disconnection"**
+- **Android**: `SonicVpnService` returns `START_STICKY` with `android:stopWithTask="false"`, and restores itself from `filesDir/last_config.json` after a process kill. For hard always-on, also enable `Settings → Network → VPN → SC VPN → Always-on VPN`
+- **Manual disconnect lasts for the current session only**: tapping "Disconnect" disables on-demand and stops the tunnel, but the next launch will auto-connect again. Turn off the "Auto Connect" switch to disable this permanently
+
+> Note: with `NEOnDemandRuleConnect`, toggling the VPN icon off in iOS Settings is reasserted immediately — that is standard "Always On VPN" behaviour, not a bug.
 
 ## Subscription Format Notes
 
@@ -147,6 +159,17 @@ The `Libbox.xcframework` artifact needs to be placed in:
 ## Running on Each Platform
 
 ### iOS / macOS
+
+> ⚠️ **Always deploy to a real device with a release build.** Flutter **debug builds cannot run standalone on iOS 14+** — the Dart VM Service needs to dial back to the host Mac and is blocked by the Local Network permission, so launching from the home screen hangs with *“In iOS 14+, debug mode Flutter apps can only be launched from Flutter tooling, IDE…”*, and the app is killed (signal 9) the moment `flutter run` exits. An always-connected VPN clearly cannot depend on a tethered Mac, so use release:
+>
+> ```bash
+> flutter build ios --release
+> xcrun devicectl device install app --device <device UUID> \
+>   build/ios/iphoneos/Runner.app
+> xcrun devicectl device process launch --device <device UUID> com.scvpn.vpnApp
+> ```
+>
+> Get the device UUID from `xcrun devicectl list devices`.
 
 Open `ios/Runner.xcodeproj` or `macos/Runner.xcodeproj` in Xcode:
 

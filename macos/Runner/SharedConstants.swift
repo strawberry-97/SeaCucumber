@@ -40,6 +40,21 @@ enum SharedConstants {
         return (try? String(contentsOf: url, encoding: .utf8)) ?? ""
     }
 
+    /// 写入一行日志到 App Group 的 tunnel.log（供主应用侧记录，如 always-on 开关状态）
+    static func log(_ message: String) {
+        let stamp = ISO8601DateFormatter().string(from: Date())
+        let line = "\(stamp) [app] \(message)\n"
+        guard let url = sharedContainerURL?.appendingPathComponent(logFileName),
+              let data = line.data(using: .utf8) else { return }
+        if let fh = try? FileHandle(forWritingTo: url) {
+            defer { try? fh.close() }
+            _ = try? fh.seekToEnd()
+            try? fh.write(contentsOf: data)
+        } else {
+            try? data.write(to: url, options: .atomic)
+        }
+    }
+
     /// 清空日志
     static func clearLog() {
         guard let url = sharedContainerURL?.appendingPathComponent(logFileName) else { return }

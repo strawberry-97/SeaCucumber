@@ -62,6 +62,16 @@ class VpnEngine {
       status.value == VpnStatus.disconnecting ||
       status.value == VpnStatus.reasserting;
 
+  /// 是否已启用「始终开启 VPN」（on-demand / always-on）。
+  /// 不支持的平台（Android）返回 false。
+  Future<bool> isAlwaysOn() async {
+    try {
+      return await _channel.invokeMethod<bool>('alwaysOn') ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// Android：请求 VPN 权限（返回是否已授权）
   Future<bool> prepare() async {
     try {

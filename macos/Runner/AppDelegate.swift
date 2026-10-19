@@ -68,6 +68,9 @@ class AppDelegate: FlutterAppDelegate {
     case "status":
       result(await VpnManager.shared.currentStatus())
 
+    case "alwaysOn":
+      result(await VpnManager.shared.isAlwaysOn())
+
     case "readLog":
       result(SharedConstants.readLog())
 

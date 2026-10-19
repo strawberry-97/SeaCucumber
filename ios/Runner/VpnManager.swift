@@ -68,16 +68,20 @@ final class VpnManager {
     }
 
     /// 查询当前状态（供 Flutter 调用）
+    ///
+    /// 注意：这里只读，不再关闭 on-demand —— 否则每次 Flutter 轮询状态
+    /// 都会把「始终开启 VPN」拆掉，导致隧道被系统断开后无法自动恢复。
     func currentStatus() async -> String {
         guard let m = await loadManager() else {
             return Self.statusName(.invalid)
         }
-        if m.isOnDemandEnabled {
-            m.isOnDemandEnabled = false
-            m.onDemandRules = []
-            try? await m.saveToPreferences()
-        }
         return Self.statusName(m.connection.status)
+    }
+
+    /// 当前是否已启用「始终开启 VPN」（on-demand）
+    func isAlwaysOn() async -> Bool {
+        guard let m = await loadManager() else { return false }
+        return m.isOnDemandEnabled
     }
 
     /// 创建或加载 VPN 配置
@@ -101,16 +105,24 @@ final class VpnManager {
     }
 
     /// 启动 VPN；configJSON 通过 providerConfiguration 传给隧道
+    ///
+    /// 默认开启 on-demand（always-on）：隧道被系统/重启/切网断开后由系统自动拉起，
+    /// 防止「自动断开」。
     func connect(configJSON: String) async throws {
         let m = try await ensureManager()
         if let proto = m.protocolConfiguration as? NETunnelProviderProtocol {
             proto.providerConfiguration = ["config": configJSON]
         }
         m.isEnabled = true
+        enableAlwaysOn(m)
         try await m.saveToPreferences()
-        if m.connection.status != .connected, m.connection.status != .connecting {
-            try m.connection.startVPNTunnel()
+
+        // 已连接（例如切换节点）：先停再起，保证新配置生效
+        if m.connection.status == .connected || m.connection.status == .connecting {
+            m.connection.stopVPNTunnel()
+            try await Task.sleep(nanoseconds: 1_200_000_000)
         }
+        try m.connection.startVPNTunnel()
         onStatusChange?(Self.statusName(.connecting))
         // 等 2 秒，若隧道未能建立则读取其日志告知用户
         try await Task.sleep(nanoseconds: 2_000_000_000)
@@ -123,9 +135,28 @@ final class VpnManager {
         onStatusChange?(Self.statusName(m.connection.status))
     }
 
-    /// 停止 VPN
+    /// 开启「始终开启 VPN」：on-demand 规则为 connect，系统会在隧道掉线时自动重连
+    private func enableAlwaysOn(_ m: NETunnelProviderManager) {
+        let rule = NEOnDemandRuleConnect()
+        rule.interfaceTypeMatch = .any
+        m.onDemandRules = [rule]
+        m.isOnDemandEnabled = true
+        SharedConstants.log("always-on: on-demand enabled (NEOnDemandRuleConnect)")
+    }
+
+    /// 关闭 always-on。**仅在用户主动断开时调用**，
+    /// 否则关闭 on-demand 后 iOS 会立刻把隧道重新拉起，表现为「断不掉」。
+    private func disableAlwaysOn(_ m: NETunnelProviderManager) async {
+        if !m.isOnDemandEnabled, (m.onDemandRules ?? []).isEmpty { return }
+        m.isOnDemandEnabled = false
+        m.onDemandRules = []
+        try? await m.saveToPreferences()
+    }
+
+    /// 停止 VPN（用户主动断开）
     func disconnect() async {
         guard let m = await loadManager() else { return }
+        await disableAlwaysOn(m)
         if m.connection.status == .connected || m.connection.status == .connecting {
             m.connection.stopVPNTunnel()
         }

@@ -49,6 +49,25 @@ class SonicVpnService : VpnService() {
     private var vpnFd: Int = -1
     private val executor = Executors.newSingleThreadExecutor()
 
+    /// 上次使用的配置（进程被杀后 START_STICKY 重启时用它恢复连接，避免配置丢失断开）
+    private fun lastConfigFile() = java.io.File(filesDir, "last_config.json")
+
+    private fun restoreConfig(config: String): String {
+        if (config.isNotEmpty()) {
+            try {
+                lastConfigFile().writeText(config)
+            } catch (_: Exception) {
+            }
+            return config
+        }
+        return try {
+            val f = lastConfigFile()
+            if (f.exists()) f.readText() else ""
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         VpnController.attach(this)
@@ -71,8 +90,9 @@ class SonicVpnService : VpnService() {
 
     // MARK: - 启动 / 停止
 
-    private fun startVpn(config: String) {
+    private fun startVpn(configRaw: String) {
         startForeground()
+        val config = restoreConfig(configRaw)
         executor.execute {
             try {
                 VpnController.appendLog("startVpn begin; config length = ${config.length}")
@@ -183,6 +203,14 @@ class SonicVpnService : VpnService() {
             }
         }
         executor.shutdown()
+    }
+
+    /**
+     * 服务被系统回收后重启（START_STICKY）：用上次的配置自动拉起，避免掉线。
+     */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        VpnController.appendLog("onTaskRemoved: keep tunnel alive")
     }
 
     override fun onRevoke() {

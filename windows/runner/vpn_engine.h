@@ -1,5 +1,6 @@
 #pragma once
 
+#include <flutter/flutter_engine.h>
 #include <flutter/method_channel.h>
 #include <flutter/standard_method_codec.h>
 #include <windows.h>
@@ -33,6 +34,7 @@ class VpnEngine {
   void NotifyStatus(const std::string& status);
   std::string ConfigPath() const;
   std::string LogPath() const;
+  std::string SingBoxPath() const;
 
   flutter::FlutterEngine* engine_;
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>> channel_;
