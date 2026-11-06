@@ -53,11 +53,34 @@ class ClashParser {
 
       var publicKey = '';
       var shortId = '';
-      final reality = map['reality-opts'];
-      if (reality != null) {
-        final r = _parseFlowMap(reality);
-        publicKey = r['public-key'] ?? '';
-        shortId = r['short-id'] ?? '';
+      final realityRaw = map['reality-opts'];
+      if (realityRaw != null) {
+        final r = _parseFlowMap(realityRaw);
+        publicKey = _clean(r['public-key']);
+        shortId = _clean(r['short-id']);
+      }
+
+      // network: ws | tcp（ws 时还要取 ws-opts.path 与 headers.Host）
+      final network = _clean(map['network']).toLowerCase();
+      final wsRaw = map['ws-opts'];
+      final isWs = network == 'ws' || wsRaw != null;
+      var wsPath = '';
+      var wsHost = '';
+      if (isWs) {
+        if (wsRaw != null) {
+          final ws = _parseFlowMap(wsRaw);
+          wsPath = _clean(ws['path']);
+          final headersRaw = ws['headers'];
+          if (headersRaw != null) {
+            final headers = _parseFlowMap(headersRaw);
+            for (final e in headers.entries) {
+              if (e.key.toLowerCase() == 'host') {
+                wsHost = _clean(e.value);
+                break;
+              }
+            }
+          }
+        }
       }
 
       nodes.add(VlessNode(
@@ -65,11 +88,17 @@ class ClashParser {
         server: server,
         port: int.parse(portStr),
         uuid: uuid,
-        flow: map['flow'] ?? 'xtls-rprx-vision',
-        fingerprint: map['client-fingerprint'] ?? 'chrome',
-        servername: map['servername'] ?? '',
+        // YAML 里未设置的字段常写成 `null`，不能当成字符串塞进 sing-box 配置
+        flow: _clean(map['flow']),
+        fingerprint: _clean(map['client-fingerprint']).isEmpty
+            ? 'chrome'
+            : _clean(map['client-fingerprint']),
+        servername: _clean(map['servername']),
         publicKey: publicKey,
         shortId: shortId,
+        transport: isWs ? 'ws' : 'tcp',
+        wsHost: wsHost,
+        wsPath: wsPath,
       ));
     }
     return nodes;
@@ -136,6 +165,14 @@ class ClashParser {
       result[key] = value;
     }
     return result;
+  }
+
+  /// 归一化：YAML 的空值（`null` / `~`）与缺失字段统一成空串
+  static String _clean(String? v) {
+    if (v == null) return '';
+    final t = v.trim();
+    if (t == '~' || t.toLowerCase() == 'null') return '';
+    return t;
   }
 
   static String _unquote(String s) {

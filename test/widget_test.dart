@@ -16,6 +16,24 @@ proxies:
     expect(nodes.first.transport, 'tcp');
   });
 
+  test('Clash YAML 解析 VLESS WebSocket 节点（flow: null 不再污染配置）', () {
+    const yaml = '''
+proxies:
+  - { name: JP-CDN, type: vless, server: cdn.example.com, port: 443, uuid: u-1, flow: null, tls: true, client-fingerprint: chrome, servername: sni.example.com, network: ws, ws-opts: { path: /3021/index, headers: { Host: host.example.com } } }
+'''; 
+    final nodes = ClashParser.parseNodes(yaml);
+    expect(nodes, hasLength(1));
+    final n = nodes.first;
+    expect(n.transport, 'ws');
+    expect(n.wsPath, '/3021/index');
+    expect(n.wsHost, 'host.example.com');
+    expect(n.flow, isEmpty);
+    final config = ConfigGenerator.makeConfig(n);
+    expect(config, contains('"type": "ws"'));
+    expect(config, isNot(contains('"flow": "null"')));
+    expect(config, isNot(contains('"reality"')));
+  });
+
   test('小火箭 base64 订阅解析', () {
     final uri = 'vless://uuid@1.2.3.4:443?type=ws&security=tls&host=cdn.com&path=%2Fws&sni=cdn.com#NodeA';
     final nodes = ShadowrocketParser.parseNodes(uri);
