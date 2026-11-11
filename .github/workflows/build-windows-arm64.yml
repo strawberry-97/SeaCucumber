@@ -1,0 +1,69 @@
+name: build-windows-arm64
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-windows-arm64.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-11-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Env info
+        shell: pwsh
+        run: |
+          flutter --version
+          flutter doctor -v
+          echo "PROCESSOR_ARCHITECTURE=$env:PROCESSOR_ARCHITECTURE"
+
+      - name: Enable windows desktop
+        run: flutter config --enable-windows-desktop
+
+      - name: Pub get
+        run: flutter pub get
+
+      - name: Build windows (arm64)
+        shell: pwsh
+        run: |
+          flutter build windows --release --target-platform windows-arm64
+          if ($LASTEXITCODE -ne 0) {
+            Write-Host "arm64 失败，回退默认构建"
+            flutter build windows --release
+          }
+
+      - name: List output
+        shell: pwsh
+        run: Get-ChildItem -Recurse build/windows -Filter *.exe | Select-Object FullName
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $dir = Get-ChildItem -Recurse -Directory build/windows -Filter Release | Select-Object -First 1
+          Write-Host "Release dir: $($dir.FullName)"
+          Compress-Archive -Path "$($dir.FullName)/*" -DestinationPath scvpn-windows.zip -Force
+          Get-Item scvpn-windows.zip | Select-Object Name, Length
+
+      - name: Publish to builds branch
+        shell: pwsh
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan builds
+          git rm -rf . --quiet
+          Copy-Item scvpn-windows.zip .
+          git add -f scvpn-windows.zip
+          git commit -m "build-windows-arm64 $(Get-Date -Format o)"
+          git push origin builds --force
